@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>光的时间切片 · BFI 时序实验室</title>
+<meta name="description" content="调刷新率、液晶响应与背光分区，观察拖影、亮度与频闪如何交换。扫描式分区 BFI 交互科普。">
+<style>
+  :root{
+    --bg:#050608; --panel:#080b0e; --ink:#f2efe8; --soft:#c8c6c1; --dim:#8c8e97;
+    --line:rgba(242,239,232,.16); --hair:rgba(242,239,232,.08);
+    --amber:#ffb27a; --cyan:#63e6e2; --blue:#77a8ff; --violet:#b394ff; --red:#ff5c7a;
+    --sans:"Noto Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    --mono:"Bahnschrift","Cascadia Mono",Consolas,monospace;
+    --grad:linear-gradient(90deg,#ff5c7a,#ff9f6e,#ffe66d,#8ef0b6,#5ce1e6,#6ea8ff,#a78bfa,#ff4d9d);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body:before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(950px 620px at 82% 8%,rgba(99,230,226,.08),transparent 63%),
+      radial-gradient(900px 700px at 96% 52%,rgba(167,139,250,.055),transparent 68%),
+      radial-gradient(720px 520px at 2% 100%,rgba(255,92,122,.04),transparent 72%)}
+  body:after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.6;
+    background-image:repeating-linear-gradient(90deg,rgba(242,239,232,.034) 0 1px,transparent 1px 80px),
+                     repeating-linear-gradient(0deg,rgba(242,239,232,.022) 0 1px,transparent 1px 80px);
+    mask-image:linear-gradient(180deg,black 0 60%,transparent 100%)}
+  a{color:inherit;text-decoration:none}
+  button,input{font:inherit}
+  button{color:inherit}
+  .wrap{position:relative;z-index:2;max-width:1480px;margin:0 auto;padding:0 48px}
+  .mono{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .bleed{width:100vw;margin-left:calc(50% - 50vw)}
+  .site-header{position:absolute;left:0;right:0;top:0;z-index:10;border-bottom:1px solid rgba(242,239,232,.12);background:linear-gradient(180deg,rgba(5,6,8,.7),rgba(5,6,8,0))}
+  .header-inner{display:flex;justify-content:space-between;align-items:center;min-height:78px}
+  .brand{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:13px;letter-spacing:.17em;text-transform:uppercase;color:var(--soft)}
+  .brand i{display:block;width:26px;height:3px;background:var(--grad);box-shadow:0 0 20px rgba(99,230,226,.45)}
+  .site-header nav{display:flex;gap:28px;font-size:13px;color:rgba(242,239,232,.58)}
+  .site-header nav a{position:relative;padding:8px 0}
+  .site-header nav a:after{content:"";position:absolute;left:0;right:100%;bottom:0;height:1px;background:var(--cyan);transition:right .25s}
+  .site-header nav a:hover{color:var(--ink)}.site-header nav a:hover:after{right:0}
+  .header-meta{font-family:var(--mono);font-size:12px;line-height:1.5;color:rgba(242,239,232,.46);text-align:right;letter-spacing:.05em}
+  .sound-toggle{appearance:none;display:flex;align-items:center;gap:9px;margin-left:20px;padding:8px 10px;border:1px solid rgba(242,239,232,.18);background:rgba(5,8,10,.35);color:rgba(242,239,232,.5);font-family:var(--mono);font-size:12px;letter-spacing:.03em;cursor:pointer;white-space:nowrap}
+  .sound-toggle:hover{color:var(--ink);border-color:rgba(242,239,232,.35)}
+  .sound-toggle.is-on{color:var(--cyan);border-color:rgba(99,230,226,.4);box-shadow:0 0 20px rgba(99,230,226,.08)}
+  .sound-toggle.is-off{color:rgba(242,239,232,.3)}
+  .sound-bars{display:flex;align-items:center;gap:2px;height:14px}
+  .sound-bars i{display:block;width:2px;height:5px;background:currentColor;transform-origin:center bottom}
+  .sound-bars i:nth-child(2){height:10px}.sound-bars i:nth-child(3){height:7px}.sound-bars i:nth-child(4){height:12px}
+  .sound-toggle.is-on .sound-bars i{animation:soundbar .8s ease-in-out infinite alternate}
+  .sound-toggle.is-on .sound-bars i:nth-child(2){animation-delay:.15s}
+  .sound-toggle.is-on .sound-bars i:nth-child(3){animation-delay:.3s}
+  .sound-toggle.is-on .sound-bars i:nth-child(4){animation-delay:.45s}
+  @keyframes soundbar{from{transform:scaleY(.45)}to{transform:scaleY(1)}}
+
+  /* ------------------------------------------------------------ hero */
+  .hero{position:relative;min-height:100svh;overflow:hidden;isolation:isolate;background:#020304}
+  .hero-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;opacity:.62;filter:saturate(.9) contrast(1.08)}
+  .hero-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;background:
+    linear-gradient(90deg,rgba(5,6,8,.97) 0%,rgba(5,6,8,.86) 27%,rgba(5,6,8,.28) 66%,rgba(5,6,8,.52) 100%),
+    linear-gradient(0deg,rgba(5,6,8,.99) 0%,rgba(5,6,8,.28) 34%,transparent 62%),
+    radial-gradient(900px 500px at 74% 38%,rgba(99,230,226,.08),transparent 70%)}
+  .hero-inner{min-height:100svh;display:flex;flex-direction:column;justify-content:space-between;padding:128px 48px 30px}
+  .hero-copy{max-width:810px;padding-top:28px}
+  .eyebrow{display:flex;align-items:center;gap:12px;margin:0 0 22px;font-family:var(--mono);font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:rgba(242,239,232,.5)}
+  .eyebrow:before{content:"";width:36px;height:1px;background:var(--line)}
+  h1{font-size:clamp(76px,8.3vw,122px);line-height:.82;letter-spacing:-.095em;font-weight:900;margin:0 0 26px;text-shadow:0 2px 40px rgba(0,0,0,.35)}
+  .hzline{display:block;white-space:nowrap}
+  .hzline .unit{font-family:var(--mono);font-size:.2em;font-weight:400;color:rgba(242,239,232,.52);margin-left:14px;vertical-align:super;letter-spacing:-.02em}
+  h1 em{display:block;font-style:normal;font-size:.59em;line-height:1.0;letter-spacing:-.075em;margin-top:25px;color:var(--amber);text-shadow:0 0 38px rgba(255,178,122,.13)}
+  .dek{font-size:17px;line-height:1.75;color:var(--soft);max-width:440px;margin:0}
+  .hero-mini-legend{display:none}
+  .hero-metrics{display:grid;grid-template-columns:repeat(4,1fr);max-width:760px;margin-top:28px;border-top:1px solid var(--line)}
+  .metric{padding:13px 16px 0 0;border-right:1px solid var(--hair)}
+  .metric:not(:first-child){padding-left:16px}
+  .metric:last-child{border-right:0}
+  .metric span{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:rgba(242,239,232,.48);margin-bottom:5px}
+  .metric strong{display:block;font-family:var(--mono);font-size:18px;font-weight:500;letter-spacing:-.01em;color:var(--ink)}
+  .metric strong[data-level="高"]{color:var(--amber)}
+  .hero-hud{position:absolute;z-index:4;right:48px;top:110px;display:flex;flex-direction:column;align-items:flex-end;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:rgba(242,239,232,.55)}
+  .live{display:flex;align-items:center;gap:9px}
+  .live i{display:block;width:7px;height:7px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 4px rgba(255,178,122,.09),0 0 20px rgba(255,178,122,.75)}
+  .hud-values{display:flex;gap:14px;align-items:baseline}
+  .hud-values b{font-weight:400;color:var(--amber)}
+  .hero-legend{position:absolute;z-index:4;right:48px;bottom:330px;display:flex;flex-direction:column;gap:12px;padding:14px 16px;background:linear-gradient(180deg,rgba(5,8,10,.12),rgba(5,8,10,.62));border-left:1px solid var(--line);backdrop-filter:blur(8px)}
+  .hero-legend b{font-family:var(--mono);font-size:12px;font-weight:400;letter-spacing:.05em;color:var(--cyan);margin-bottom:2px}
+  .hero-legend span{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:rgba(242,239,232,.55);white-space:nowrap}
+  .hero-legend i{display:block;width:26px;height:2px;background:rgba(242,239,232,.85);box-shadow:0 0 10px rgba(255,255,255,.35)}
+  .hero-legend .legend-spectrum{height:5px;background:var(--grad);box-shadow:0 0 14px rgba(99,230,226,.3)}
+  .hero-legend .legend-dark{height:7px;background:#010203;border:1px solid rgba(255,178,122,.4)}
+  .hero-canvas{transform:scale(calc(1 + var(--hp,0)*.08));filter:saturate(.9) contrast(1.08) blur(calc(var(--hp,0)*1.2px))}
+  .hero-copy{transform:translateY(calc(var(--hp,0)*-26px)) scale(calc(1 - var(--hp,0)*.02));opacity:calc(1 - var(--hp,0)*.35)}
+  .hero-scrim{opacity:calc(1 - var(--hp,0)*.18)}
+  .console{margin-top:28px;display:grid;transform:translateY(calc(var(--hp,0)*14px));opacity:calc(1 - var(--hp,0)*.18);grid-template-columns:minmax(320px,.9fr) minmax(0,1.6fr);gap:26px;padding:16px 18px 12px;background:rgba(6,9,12,.74);border:1px solid rgba(242,239,232,.17);box-shadow:0 0 60px rgba(0,0,0,.3);backdrop-filter:blur(18px)}
+  .console-main{display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+  .console-label{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:rgba(242,239,232,.4);display:flex;justify-content:space-between;align-items:center}
+  .console-label b{font-weight:400;color:var(--cyan)}
+  .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+  .mode-btn{appearance:none;border:1px solid rgba(242,239,232,.16);background:transparent;color:rgba(242,239,232,.5);min-height:42px;padding:8px 9px;text-align:left;font-size:13px;cursor:pointer;transition:background .18s,color .18s,border-color .18s}
+  .mode-btn:hover{color:var(--ink);border-color:rgba(242,239,232,.32)}
+  .mode-btn.is-on{background:var(--ink);border-color:var(--ink);color:var(--bg);box-shadow:0 0 28px rgba(242,239,232,.08)}
+  .presets{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:6px}
+  .preset{appearance:none;border:0;background:transparent;padding:3px 0;font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:rgba(242,239,232,.4);cursor:pointer;border-bottom:1px solid transparent}
+  .preset:hover{color:var(--cyan);border-color:rgba(99,230,226,.4)}
+  .knob-deck{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(170px,1.1fr);gap:16px;align-items:end}
+  .knob{appearance:none;display:block;width:100%;border:0;background:transparent;padding:0;text-align:center;cursor:ns-resize;color:var(--ink);touch-action:none;outline:none}
+  .knob:focus-visible .knob-dial{box-shadow:0 0 0 2px var(--cyan),0 0 30px rgba(99,230,226,.28)}
+  .knob .k-label{display:block;font-family:var(--mono);font-size:12px;line-height:1.3;color:var(--dim);text-transform:uppercase;margin-bottom:7px;white-space:normal;min-height:31px}
+  .knob-dial{position:relative;display:block;width:68px;height:68px;margin:0 auto;border-radius:50%;
+    background:conic-gradient(from 230deg,var(--cyan) 0 var(--p,50%),rgba(242,239,232,.12) var(--p,50%) 78%,transparent 78% 100%);
+    box-shadow:0 0 30px rgba(99,230,226,.06)}
+  .knob-dial:before{content:"";position:absolute;inset:7px;border-radius:50%;background:radial-gradient(circle at 35% 25%,#1d2328,#0a0e12 62%,#050608);border:1px solid rgba(242,239,232,.14)}
+  .knob-dial:after{content:"";position:absolute;inset:17px;border-radius:50%;border:1px solid rgba(242,239,232,.06)}
+  .knob-needle{position:absolute;left:50%;top:12%;width:2px;height:52%;background:var(--ink);transform-origin:50% 74%;transform:translateX(-50%) rotate(var(--a,0deg));box-shadow:0 0 10px rgba(255,255,255,.65);z-index:1}
+  .knob output{display:block;font-family:var(--mono);font-size:12px;letter-spacing:0;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
+  .knob.is-turning .knob-dial{box-shadow:0 0 0 1px rgba(99,230,226,.3),0 0 38px rgba(99,230,226,.18)}
+  .fader-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .fader-head span{font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:rgba(242,239,232,.48);text-transform:uppercase}
+  .fader-head output{font-family:var(--mono);font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .fader{appearance:none;width:100%;height:26px;background:transparent;margin:12px 0 0;cursor:ew-resize}
+  .fader::-webkit-slider-runnable-track{height:7px;background:linear-gradient(90deg,rgba(99,230,226,.65),rgba(255,178,122,.65));border:1px solid rgba(242,239,232,.1)}
+  .fader::-webkit-slider-thumb{appearance:none;width:32px;height:23px;margin-top:-9px;background:#1b2228;border:1px solid rgba(242,239,232,.55);box-shadow:0 0 16px rgba(99,230,226,.25)}
+  .fader::-moz-range-track{height:7px;background:linear-gradient(90deg,rgba(99,230,226,.65),rgba(255,178,122,.65));border:1px solid rgba(242,239,232,.1)}
+  .fader::-moz-range-thumb{width:32px;height:23px;border-radius:0;background:#1b2228;border:1px solid rgba(242,239,232,.55)}
+  .fader-scale{display:flex;justify-content:space-between;margin-top:3px;font-family:var(--mono);font-size:12px;color:rgba(242,239,232,.3)}
+  .console-foot{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:14px;border-top:1px solid var(--hair);margin-top:2px;padding-top:8px}
+  .disclaimer{font-size:12px;line-height:1.45;color:rgba(242,239,232,.38);margin:0;max-width:760px}
+  .pause{appearance:none;border:0;background:transparent;color:var(--amber);font-family:var(--mono);font-size:12px;letter-spacing:.05em;padding:6px 0 6px 10px;cursor:pointer}
+
+  /* ------------------------------------------------------------ inspect */
+  .inspect-section{position:relative;overflow:hidden;border-top:1px solid var(--line);padding:88px 0 0;background:radial-gradient(ellipse at 52% 56%,rgba(15,29,34,.34),rgba(4,6,8,0) 64%)}
+  .inspect-head{padding-bottom:30px}
+  .inspect-head-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(300px,.72fr);gap:52px;align-items:end}
+  .inspect-head h2{font-size:clamp(50px,5.7vw,84px);line-height:.94;letter-spacing:-.075em;margin:0;font-weight:600}
+  .inspect-head p.lede{font-size:15px;line-height:1.8;color:var(--dim);margin:0 0 18px;max-width:440px}
+  .inspect-stage{position:relative;height:640px;overflow:hidden;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:radial-gradient(ellipse at 58% 44%,rgba(15,29,34,.66),rgba(4,6,8,.98) 68%)}
+  .inspect-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+  .inspect-canvas.is-dragging{cursor:grabbing}
+  .layer-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{appearance:none;min-height:40px;border:1px solid var(--line);background:rgba(4,7,9,.5);color:var(--dim);font-size:12px;padding:7px 11px;cursor:pointer}
+  .chip.is-on{color:var(--ink);border-color:rgba(99,230,226,.42);background:rgba(99,230,226,.06)}
+  .chip:hover{color:var(--ink)}
+  .explode-head{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.03em}
+  .explode-head output{color:var(--ink);font-size:12px}
+  .explode{appearance:none;width:100%;height:26px;background:transparent;margin:5px 0 0;cursor:ew-resize}
+  .explode::-webkit-slider-runnable-track{height:2px;background:rgba(242,239,232,.18)}
+  .explode::-webkit-slider-thumb{appearance:none;width:16px;height:16px;margin-top:-7px;border-radius:50%;background:var(--amber);box-shadow:0 0 18px rgba(255,178,122,.55)}
+  .explode::-moz-range-track{height:2px;background:rgba(242,239,232,.18)}
+  .explode::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--amber)}
+  .view-actions{display:flex;gap:18px;flex-wrap:wrap;margin-top:4px}
+  .view-actions button{appearance:none;background:transparent;border:0;border-bottom:1px solid var(--hair);color:var(--dim);font-family:var(--mono);font-size:12px;letter-spacing:.04em;padding:6px 0;cursor:pointer}
+  .view-actions button:hover,.view-actions button.is-on{color:var(--cyan);border-color:rgba(99,230,226,.4)}
+  .inspect-controls{position:absolute;left:48px;bottom:22px;z-index:3;width:430px;padding-top:11px;border-top:1px solid var(--line);background:linear-gradient(180deg,rgba(4,6,8,.1),rgba(4,6,8,.74));backdrop-filter:blur(8px)}
+  .inspect-hud{position:absolute;right:48px;top:24px;z-index:3;font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:rgba(242,239,232,.45);line-height:1.65;text-align:right;pointer-events:none}
+  .inspect-hud b{display:block;font-weight:400;color:var(--ink);letter-spacing:.08em}
+  .inspect-hint{position:absolute;right:48px;bottom:22px;z-index:3;font-family:var(--mono);font-size:12px;color:rgba(242,239,232,.34);pointer-events:none}
+
+  /* ------------------------------------------------------------ timeline */
+  .timeline-section{padding:104px 0 94px;border-top:1px solid var(--line)}
+  .timeline-head{display:flex;justify-content:space-between;align-items:flex-end;gap:30px;margin-bottom:35px}
+  .timeline-head h2{font-size:clamp(48px,5.4vw,80px);line-height:.98;letter-spacing:-.075em;font-weight:600;margin:0 0 14px;max-width:780px}
+  .timeline-head p.lede{font-size:15px;line-height:1.75;color:var(--dim);max-width:540px;margin:0}
+  .timeline-mark{font-family:var(--mono);font-size:clamp(44px,5vw,72px);line-height:.9;letter-spacing:-.06em;color:rgba(242,239,232,.12);white-space:nowrap;text-align:right}
+  .timeline-mark span{display:block;font-size:12px;letter-spacing:.08em;color:rgba(242,239,232,.35);margin-top:10px}
+  .timing{background:#070a0d;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 48px 12px}
+  .timing-head{display:grid;grid-template-columns:minmax(220px,.7fr) minmax(300px,1.2fr) auto;gap:28px;align-items:end;margin-bottom:5px}
+  .timing-head>span{font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:var(--dim)}
+  .timing-head output{font-family:var(--mono);font-size:28px;color:var(--amber);letter-spacing:-.03em;text-align:right}
+  .timing-live{display:flex;flex-direction:column;gap:5px;padding-left:16px;border-left:1px solid rgba(99,230,226,.45)}
+  .timing-live span{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:var(--dim)}
+  .timing-live span i{display:block;width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px rgba(99,230,226,.7)}
+  .timing-live strong{font-size:22px;font-weight:500;line-height:1.2;letter-spacing:-.025em;color:var(--cyan);text-shadow:0 0 24px rgba(99,230,226,.16)}
+  .timing-note{font-size:14px;line-height:1.65;color:var(--soft);margin:7px 0 5px;max-width:820px}
+  .timing svg{display:block;width:100%;height:auto;cursor:ew-resize}
+  .timing .scrub{appearance:none;width:100%;height:22px;background:transparent;margin:0;cursor:ew-resize}
+  .timing .scrub::-webkit-slider-runnable-track{height:2px;background:rgba(242,239,232,.16)}
+  .timing .scrub::-webkit-slider-thumb{appearance:none;width:12px;height:12px;margin-top:-5px;border-radius:50%;background:var(--amber);box-shadow:0 0 18px rgba(255,178,122,.65)}
+  .timing .scrub::-moz-range-track{height:2px;background:rgba(242,239,232,.16)}
+  .timing .scrub::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:var(--amber)}
+  .timing-foot{display:flex;justify-content:space-between;gap:16px;font-family:var(--mono);font-size:12px;color:rgba(242,239,232,.38);letter-spacing:.03em;padding:6px 0 0}
+  .timing-foot strong{font-weight:400;color:var(--cyan)}
+
+  /* ------------------------------------------------------------ ways */
+  .ways-section{padding:96px 0;border-top:1px solid var(--line)}
+  .ways-head{display:grid;grid-template-columns:minmax(0,.92fr) minmax(300px,.72fr);gap:50px;align-items:end;margin-bottom:44px}
+  .ways-head h2{font-size:clamp(52px,6vw,88px);line-height:.94;letter-spacing:-.075em;font-weight:600;margin:0}
+  .ways-head p{font-size:15px;line-height:1.75;color:var(--dim);margin:0 0 5px;max-width:480px}
+  .way-row{display:grid;grid-template-columns:72px minmax(250px,.82fr) minmax(380px,1.25fr);gap:36px;align-items:center;border-top:1px solid var(--line);padding:28px 0 30px;min-height:250px}
+  .way-row.reverse{grid-template-columns:72px minmax(380px,1.25fr) minmax(250px,.82fr)}
+  .way-row.reverse .way-copy{order:3;grid-column:3}
+  .way-row.reverse .way-visual{order:2;grid-column:2}
+  .way-no{font-family:var(--mono);font-size:46px;line-height:1;letter-spacing:-.06em;color:rgba(242,239,232,.2)}
+  .way-copy h3{font-size:34px;font-weight:500;letter-spacing:-.035em;margin:0 0 10px}
+  .way-copy p{font-size:14px;line-height:1.7;color:var(--dim);margin:0 0 18px;max-width:430px}
+  .way-plain{font-size:17px !important;line-height:1.55 !important;color:var(--soft) !important;margin:0 0 9px !important}
+  .way-plain b{font-weight:400;color:var(--amber)}
+  .way-detail{font-size:14px !important;line-height:1.75 !important;color:var(--dim) !important;margin:0 0 13px !important}
+  .way-points{display:flex;flex-wrap:wrap;gap:7px 20px;margin:0 0 14px}
+  .way-points span{display:flex;gap:7px;align-items:baseline;font-size:13px;line-height:1.5;color:var(--dim)}
+  .way-points b{font-family:var(--mono);font-size:12px;font-weight:400;letter-spacing:.03em;color:var(--cyan);white-space:nowrap}
+  .mini{position:relative;height:195px;background:#030405;border:1px solid var(--hair);overflow:hidden}
+  .mini:after{content:"";position:absolute;inset:0;background-image:repeating-linear-gradient(90deg,rgba(242,239,232,.05) 0 1px,transparent 1px 44px),repeating-linear-gradient(0deg,rgba(242,239,232,.04) 0 1px,transparent 1px 20px);pointer-events:none}
+  .mini .band{position:absolute;left:0;right:0;height:24px;background:rgba(255,92,122,.1)}
+  .mini .band.b2{top:28px;background:rgba(92,225,230,.08)}
+  .mini .band.b3{top:102px;background:rgba(110,168,255,.07)}
+  .mini .cut{position:absolute;left:0;right:0;background:#000;opacity:.95}
+  .mini .cut.g{top:50px;height:78px}
+  .mini .cut.s{top:122px;height:42px}
+  .mini .edge{position:absolute;top:0;bottom:0;left:58%;width:2px;background:#fff;box-shadow:0 0 18px rgba(255,255,255,.45)}
+  .mini .edge:after{content:"";position:absolute;left:3px;top:0;bottom:0;width:1px;background:var(--cyan);opacity:.7}
+  .mini-label{font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:var(--dim);display:flex;justify-content:space-between;gap:14px}
+
+  /* ------------------------------------------------------------ cost */
+  .cost-section{padding:98px 0 110px;border-top:1px solid var(--line)}
+  .cost-head{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;margin-bottom:46px}
+  .cost-head h2{font-size:clamp(58px,7.4vw,106px);line-height:.88;letter-spacing:-.085em;font-weight:600;margin:0}
+  .cost-head>div{display:flex;flex-direction:column;gap:12px;max-width:390px}
+  .cost-head p{font-size:15px;line-height:1.75;color:var(--dim);max-width:390px;margin:0}
+  .cost-strip{display:grid;grid-template-columns:repeat(3,1fr);align-items:start;border-top:1px solid var(--line)}
+  .cost-item{padding:22px 30px 18px 0;border-right:1px solid var(--hair);min-height:230px}
+  .cost-item:nth-child(2){padding-top:64px}
+  .cost-item:nth-child(3){padding-top:112px;border-right:0}
+  .cost-item .n{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--amber)}
+  .cost-item h3{font-size:31px;font-weight:500;letter-spacing:-.04em;margin:22px 0 10px}
+  .cost-item p{font-size:14px;line-height:1.7;color:var(--dim);margin:0;max-width:310px}
+  .cost-close{font-size:19px;line-height:1.55;color:var(--amber);border-top:1px solid var(--line);padding-top:18px;margin:26px 0 0;max-width:820px;letter-spacing:-.015em}
+
+  /* ------------------------------------------------------------ apps */
+  .apps-section{padding:96px 0 90px;border-top:1px solid var(--line)}
+  .apps-head{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;margin-bottom:32px}
+  .apps-head h2{font-size:clamp(50px,5.8vw,84px);line-height:.94;letter-spacing:-.075em;font-weight:600;margin:0}
+  .apps-head p{font-size:15px;line-height:1.7;color:var(--dim);max-width:430px;margin:0 0 6px}
+  .appshow{display:flex;flex-direction:column}
+  .app-stage{position:relative;height:580px;background:radial-gradient(ellipse at 50% 44%,rgba(20,34,39,.8),rgba(4,6,8,.98) 68%);border-top:1px solid var(--line);border-bottom:1px solid var(--line);overflow:hidden;touch-action:none}
+  .app-stage canvas{display:block;width:100%;height:100%;cursor:grab}
+  .app-stage canvas.is-dragging{cursor:grabbing}
+  .app-hud{position:absolute;left:24px;top:20px;pointer-events:none;line-height:1.35}
+  .app-hud span{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:rgba(242,239,232,.42);margin-bottom:5px}
+  .app-hud b{display:block;font-size:23px;font-weight:400;letter-spacing:-.02em}
+  .app-hud em{display:block;font-style:normal;font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:var(--amber);margin-top:4px}
+  .app-controls{position:absolute;left:24px;bottom:18px;display:flex;gap:12px;align-items:center}
+  .app-controls button{appearance:none;border:0;background:rgba(5,8,10,.5);color:rgba(242,239,232,.45);font-family:var(--mono);font-size:12px;letter-spacing:.03em;padding:6px 8px;cursor:pointer;border-bottom:1px solid transparent}
+  .app-controls button:hover,.app-controls button.is-on{color:var(--cyan);border-color:rgba(99,230,226,.45)}
+  .app-hint{position:absolute;right:24px;bottom:19px;font-family:var(--mono);font-size:12px;color:rgba(242,239,232,.36);pointer-events:none}
+  .app-caption{display:grid;grid-template-columns:130px 1fr auto;gap:22px;align-items:start;padding:13px 0;border-bottom:1px solid var(--line)}
+  .app-caption>span{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--dim)}
+  .app-caption p{font-size:14px;line-height:1.6;color:var(--soft);margin:0}
+  .app-caption small{font-family:var(--mono);font-size:12px;line-height:1.5;color:rgba(242,239,232,.3);text-align:right}
+  .app-index{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--line)}
+  .app-tab{appearance:none;display:grid;grid-template-columns:1fr;gap:5px;text-align:left;border:0;border-right:1px solid var(--hair);border-top:2px solid transparent;background:transparent;color:var(--dim);padding:9px 12px 11px;cursor:pointer;transition:background .18s,color .18s,border-color .18s}
+  .app-tab:last-child{border-right:0}
+  .app-tab>span{font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:rgba(242,239,232,.35);order:2}
+  .app-tab b{font-size:17px;font-weight:400;letter-spacing:-.02em;color:var(--ink);order:2}
+  .app-tab i{font-style:normal;font-family:var(--mono);font-size:12px;color:rgba(242,239,232,.32);order:3}
+  .app-thumb{display:block;width:100%;height:66px;border:1px solid rgba(242,239,232,.1);background:rgba(2,4,6,.8);order:1;opacity:.7;transition:opacity .18s,border-color .18s,box-shadow .18s}
+  .app-tab:hover .app-thumb{opacity:.95}
+  .app-tab.is-on{background:linear-gradient(180deg,rgba(99,230,226,.075),transparent);border-top-color:var(--cyan)}
+  .app-tab.is-on>span{color:var(--cyan)}
+  .app-tab.is-on .app-thumb{opacity:1;border-color:rgba(99,230,226,.45);box-shadow:0 0 22px rgba(99,230,226,.1)}
+
+  footer{border-top:1px solid var(--line);padding:30px 0 42px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+  footer .mark{font-size:21px;letter-spacing:-.03em}
+  footer p{font-size:12px;line-height:1.7;color:var(--dim);margin:0;max-width:560px;text-align:right}
+
+  /* ------------------------------------------------------------ scroll motion */
+  .scroll-line{position:fixed;left:0;top:0;height:2px;width:var(--sp,0%);z-index:30;background:var(--grad);box-shadow:0 0 16px rgba(99,230,226,.45);pointer-events:none}
+  .scroll-rail{position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:20;display:flex;flex-direction:column;gap:13px;align-items:flex-end;font-family:var(--mono)}
+  .scroll-rail a{display:flex;align-items:center;gap:9px;font-size:12px;color:rgba(242,239,232,.34);padding:2px 0}
+  .scroll-rail i{display:block;width:5px;height:5px;border-radius:50%;background:rgba(242,239,232,.25);box-shadow:0 0 0 0 rgba(99,230,226,0);transition:background .25s,box-shadow .25s,transform .25s}
+  .scroll-rail em{font-style:normal;font-size:12px;letter-spacing:.06em;opacity:0;transform:translateX(6px);transition:opacity .25s,transform .25s,color .25s}
+  .scroll-rail a:hover em,.scroll-rail a:focus-visible em,.scroll-rail a.is-on em{opacity:1;transform:none}
+  .scroll-rail a.is-on{color:var(--cyan)}
+  .scroll-rail a.is-on i{background:var(--cyan);box-shadow:0 0 0 4px rgba(99,230,226,.09),0 0 18px rgba(99,230,226,.8);transform:scale(1.35)}
+
+  html.motion-ready [data-reveal]{will-change:opacity,transform,clip-path,filter;transition-delay:var(--d,0s)}
+  html.motion-ready [data-reveal="mask"]{clip-path:inset(0 100% 0 0);opacity:.35;transition:clip-path 1.15s cubic-bezier(.16,1,.3,1),opacity .8s}
+  html.motion-ready [data-reveal="fade"]{opacity:0;filter:blur(8px);transform:scale(.985);transition:opacity .85s ease,filter .9s ease,transform .9s cubic-bezier(.16,1,.3,1)}
+  html.motion-ready [data-reveal="tilt"]{opacity:0;filter:blur(10px);transform:perspective(900px) rotateX(9deg) scale(.96);transform-origin:center top;transition:opacity .8s ease,filter .9s ease,transform 1s cubic-bezier(.16,1,.3,1)}
+  html.motion-ready [data-reveal="wipe"]{clip-path:inset(0 0 100% 0);opacity:.4;transition:clip-path 1s cubic-bezier(.16,1,.3,1),opacity .9s ease}
+  html.motion-ready [data-reveal="curtain"]{clip-path:inset(0 0 100% 0);opacity:.35;transition:clip-path 1.15s cubic-bezier(.16,1,.3,1),opacity .8s ease}
+  html.motion-ready [data-reveal="zoom"]{opacity:0;filter:blur(12px);transform:scale(.93) rotateX(4deg);transition:opacity .9s ease,filter 1s ease,transform 1.1s cubic-bezier(.16,1,.3,1)}
+  html.motion-ready [data-reveal].is-inview{clip-path:inset(0 0 0 0);opacity:1;filter:none;transform:none}
+
+  @keyframes heroTitleIn{0%{opacity:0;clip-path:inset(0 0 100% 0);transform:translateY(18px) rotate(-1.3deg)}100%{opacity:1;clip-path:inset(0);transform:none}}
+  @keyframes consoleIn{0%{opacity:0;clip-path:inset(0 0 100% 0)}100%{opacity:1;clip-path:inset(0)}}
+  .hero-copy h1{animation:heroTitleIn 1.05s .12s both cubic-bezier(.16,1,.3,1)}
+  .console{animation:consoleIn 1s .26s both cubic-bezier(.16,1,.3,1)}
+
+  @media (prefers-reduced-motion:reduce){
+    html.motion-ready [data-reveal]{clip-path:none!important;opacity:1!important;filter:none!important;transform:none!important}
+    .hero-copy h1,.console{animation:none!important}
+    .hero-canvas,.hero-copy,.hero-scrim,.console{transform:none!important}
+    .scroll-rail{display:none}
+  }
+
+  @media (max-width:1120px){
+    .wrap{padding:0 28px}
+    .scroll-rail{display:none}
+    .hero-legend{display:none}
+    .header-meta{display:none}
+    .hero-inner{padding-top:118px}
+    .console{grid-template-columns:1fr 1.5fr;gap:18px}
+    .way-row,.way-row.reverse{grid-template-columns:60px minmax(220px,.8fr) minmax(320px,1.2fr);gap:24px}
+    .way-row.reverse{grid-template-columns:60px minmax(320px,1.2fr) minmax(220px,.8fr)}
+    .apps-head h2{max-width:650px}
+  }
+  @media (max-width:820px){
+    .wrap{padding:0 20px}
+    .site-header nav,.header-meta{display:none}
+    .header-inner{min-height:64px}
+    .sound-toggle{margin-left:auto;padding:7px 8px;font-size:12px}
+    .hero-inner{padding:96px 20px 20px;min-height:100svh}
+    .hero-copy{padding-top:10px}
+    h1{font-size:clamp(66px,15vw,96px)}
+    .hero-canvas{opacity:.5}
+    .hero-hud{display:none}
+    .hero-mini-legend{display:flex;flex-wrap:wrap;gap:5px 14px;margin-top:14px;font-family:var(--mono);font-size:12px;letter-spacing:.02em;color:rgba(242,239,232,.46)}
+    .hero-mini-legend span{display:flex;align-items:center;gap:6px}
+    .hero-mini-legend span:before{content:"";width:14px;height:1px;background:rgba(242,239,232,.55)}
+    .hero-mini-legend span:nth-child(2):before{height:4px;background:var(--grad)}
+    .hero-mini-legend span:nth-child(3):before{height:5px;background:#010203;border:1px solid rgba(255,178,122,.4)}
+    .hero-metrics{grid-template-columns:1fr 1fr;max-width:none;margin-top:18px}
+    .metric:nth-child(2){border-right:0}
+    .metric:nth-child(3),.metric:nth-child(4){border-top:1px solid var(--hair);padding-top:11px}
+    .console{grid-template-columns:1fr;gap:12px;padding:12px}
+    .console-main{display:block}
+    .presets{margin-top:7px}
+    .knob-deck{grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
+    .knob-dial{width:60px;height:60px}
+    .console-foot{padding-top:7px}
+    .inspect-section{padding:56px 0 0}
+    .inspect-head{padding-bottom:23px}
+    .inspect-head-grid{grid-template-columns:1fr;gap:15px}
+    .inspect-head h2{font-size:50px}
+    .inspect-stage{height:430px}
+    .inspect-controls{left:20px;bottom:14px;width:calc(100% - 40px)}
+    .inspect-hud{right:20px;top:16px;font-size:12px}
+    .inspect-hint{right:20px;bottom:14px;font-size:12px}
+    .timeline-section{padding:66px 0 60px}
+    .timeline-head{display:block}
+    .timeline-mark{font-size:48px;text-align:left;margin-top:18px}
+    .timing{padding:12px 18px 10px}
+    .timing-head{grid-template-columns:1fr auto;gap:8px 16px}
+    .timing-head>span{grid-column:1}
+    .timing-head output{grid-column:2;font-size:22px}
+    .timing-live{grid-column:1/-1;grid-row:2;padding-left:12px;margin-top:3px}
+    .timing-live strong{font-size:18px}
+    .timing-note{font-size:13px;line-height:1.65;margin:5px 0 3px}
+    .ways-section{padding:64px 0}
+    .ways-head{grid-template-columns:1fr;gap:14px;margin-bottom:30px}
+    .ways-head h2{font-size:54px}
+    .way-row,.way-row.reverse{grid-template-columns:42px 1fr;grid-template-rows:auto auto;gap:10px 16px;padding:22px 0;min-height:0}
+    .way-no{grid-column:1;grid-row:1;align-self:start;font-size:32px}
+    .way-copy,.way-row.reverse .way-copy{grid-column:2;grid-row:1;order:1}
+    .way-visual,.way-row.reverse .way-visual{grid-column:1/-1;grid-row:2;order:2;margin-top:8px}
+    .way-copy h3{font-size:28px}
+    .mini{height:160px}
+    .cost-section{padding:66px 0 76px}
+    .cost-head{display:block;margin-bottom:30px}
+    .cost-head h2{font-size:62px}
+    .cost-head>div{margin-top:16px;gap:9px}
+    .cost-head p{font-size:14px}
+    .cost-close{font-size:17px;margin-top:20px}
+    .cost-strip{grid-template-columns:1fr}
+    .cost-item,.cost-item:nth-child(2),.cost-item:nth-child(3){padding:20px 0;border-right:0;border-bottom:1px solid var(--hair);min-height:0}
+    .cost-item h3{margin:12px 0 8px;font-size:27px}
+    .apps-section{padding:64px 0}
+    .apps-head{display:block;margin-bottom:24px}
+    .apps-head h2{font-size:54px}
+    .apps-head p{margin-top:14px}
+    .app-stage{height:380px}
+    .app-hud b{font-size:20px}
+    .app-caption{grid-template-columns:1fr;gap:5px;padding:11px 0}
+    .app-caption small{text-align:left}
+    .app-index{grid-template-columns:repeat(2,1fr)}
+    .app-tab:nth-child(2n){border-right:0}
+    .app-thumb{height:50px}
+    footer{display:block}footer p{text-align:left;margin-top:14px}
+  }
+  @media (max-width:520px){
+    .wrap{padding:0 16px}
+    h1{font-size:clamp(62px,18vw,84px)}
+    h1 em{font-size:.56em}
+    .dek{font-size:15px}
+    .hero-inner{padding-top:88px}
+    .hero-hud{top:78px;font-size:12px}
+    .hero-hud .hud-values{gap:8px}
+    .modes{grid-template-columns:1fr}
+    .knob-deck{grid-template-columns:1fr 1fr 1fr}
+    .knob .k-label{font-size:12px;min-height:31px}
+    .fader-head span{font-size:12px}
+    .fader-scale{font-size:12px}
+    .console-foot{display:block}
+    .pause{padding-left:0;margin-top:5px}
+    .inspect-stage{height:430px}
+    .inspect-head h2{font-size:42px}
+    .inspect-controls{width:calc(100% - 32px);left:16px;bottom:12px}
+    .timeline-head h2{font-size:40px}
+    .timing svg{min-height:220px}
+    .timing-foot{display:flex;flex-wrap:wrap;justify-content:space-between;row-gap:5px;line-height:1.5}
+    .apps-head h2{font-size:40px}
+    .app-stage{height:320px}
+    .app-hud{left:14px;top:14px}
+    .app-hud b{font-size:18px}
+    .app-controls{left:14px;bottom:12px}
+    .app-hint{right:14px;bottom:13px;font-size:12px}
+    .app-controls button{font-size:12px}
+    .app-thumb{height:42px}
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="#top"><i></i>TIME-SLICE / BFI</a>
+    <nav aria-label="主导航"><a href="#lab">实验台</a><a href="#inspect">拆开看</a><a href="#frame">一帧</a><a href="#cost">代价</a><a href="#use">应用</a></nav>
+    <div class="header-meta">INTERACTIVE SCIENCE / 01<br>DISPLAY TIME / 139 BPM</div>
+    <button class="sound-toggle" data-sound-toggle aria-pressed="false" aria-label="开关音乐与音效" title="点击开启或关闭音乐与音效">
+      <span class="sound-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span data-sound-label>SOUND / READY</span>
+    </button>
+  </div>
+</header>
+
+<div class="scroll-line" aria-hidden="true"></div>
+<nav class="scroll-rail" aria-label="页面章节进度">
+  <a href="#lab" data-scene="lab" class="is-on"><em>LAB</em><i></i></a>
+  <a href="#inspect" data-scene="inspect"><em>STACK</em><i></i></a>
+  <a href="#frame" data-scene="frame"><em>FRAME</em><i></i></a>
+  <a href="#ways" data-scene="ways"><em>WAYS</em><i></i></a>
+  <a href="#cost" data-scene="cost"><em>BILL</em><i></i></a>
+  <a href="#use" data-scene="use"><em>APPLY</em><i></i></a>
+</nav>
+
+<main id="top">
+  <section class="hero" id="lab" data-lab data-mode="hold" aria-label="BFI 时序实验台">
+    <canvas class="hero-canvas" data-sim-canvas aria-label="移动边缘与背光时序仿真画面"></canvas>
+    <div class="hero-scrim"></div>
+    <div class="hero-hud">
+      <div class="live"><i></i><span>LIVE SIM / 01</span></div>
+      <div class="hud-values"><span data-metric="mode-en">SAMPLE &amp; HOLD</span><b data-metric="zones">8 分区</b></div>
+    </div>
+    <div class="hero-legend" aria-hidden="true">
+      <b>先看这里 / WHAT TO WATCH</b>
+      <span><i class="legend-line"></i>白线 / 运动边缘</span>
+      <span><i class="legend-spectrum"></i>彩带 / 背光分区</span>
+      <span><i class="legend-dark"></i>黑带 / BFI 暗窗</span>
+    </div>
+    <div class="wrap hero-inner">
+      <div class="hero-copy">
+        <p class="eyebrow">01 / A HANDS-ON DISPLAY TIME LAB / 139 BPM</p>
+        <h1><span class="hzline">240<span class="unit">Hz</span></span><em>为什么<br>还是糊？</em></h1>
+        <p class="dek">把一帧拆成三个时间。转旋钮、推推子、拖动三维面板，看拖影、亮度与频闪如何互相交换。</p>
+        <div class="hero-mini-legend" aria-hidden="true"><span>白线 / 运动边缘</span><span>彩带 / 背光</span><span>黑带 / BFI 暗窗</span></div>
+        <div class="hero-metrics">
+          <div class="metric"><span>FRAME</span><strong data-metric="frame">4.17 ms</strong></div>
+          <div class="metric"><span>拖影 / 示意</span><strong data-metric="blur">-- px</strong></div>
+          <div class="metric"><span>平均亮度</span><strong data-metric="brightness">100%</strong></div>
+          <div class="metric"><span>频闪风险</span><strong data-metric="flicker">低</strong></div>
+        </div>
+      </div>
+
+      <div class="console">
+        <div class="console-main">
+          <div class="console-label"><span>CONTROL / 01</span><b data-metric="state">普通显示</b></div>
+          <div class="modes" role="group" aria-label="背光模式">
+            <button class="mode-btn is-on" data-set-mode="hold" aria-pressed="true">普通显示</button>
+            <button class="mode-btn" data-set-mode="global" aria-pressed="false">全局 BFI</button>
+            <button class="mode-btn" data-set-mode="scan" aria-pressed="false">扫描 BFI</button>
+          </div>
+          <div class="presets" aria-label="预设">
+            <button class="preset" data-preset="hold60">60Hz 普通</button>
+            <button class="preset" data-preset="global240">240Hz 全局</button>
+            <button class="preset" data-preset="scan240">240Hz 扫描</button>
+            <button class="preset" data-preset="scan360">360Hz 扫描</button>
+          </div>
+        </div>
+        <div class="knob-deck">
+          <button class="knob" data-knob="refresh" data-min="60" data-max="360" data-step="30" data-value="240" data-suffix=" Hz" aria-label="刷新率">
+            <span class="k-label">刷新率 / HZ</span><span class="knob-dial"><span class="knob-needle"></span></span><output>240 Hz</output>
+          </button>
+          <button class="knob" data-knob="lc" data-min="1" data-max="16" data-step="0.5" data-value="6" data-suffix=" ms" data-decimals="1" aria-label="液晶响应">
+            <span class="k-label">液晶响应 / MS</span><span class="knob-dial"><span class="knob-needle"></span></span><output>6.0 ms</output>
+          </button>
+          <button class="knob" data-knob="zones" data-min="2" data-max="16" data-step="2" data-value="8" data-suffix=" 区" aria-label="分区数量">
+            <span class="k-label">分区 / ZONES</span><span class="knob-dial"><span class="knob-needle"></span></span><output>8 区</output>
+          </button>
+          <div class="fader-card">
+            <div class="fader-head"><span>背光占空比 / DUTY</span><output data-out="duty">45%</output></div>
+            <input class="fader" type="range" min="10" max="100" step="5" value="45" data-control="duty" aria-label="背光占空比">
+            <div class="fader-scale"><span>10</span><span>100</span></div>
+          </div>
+        </div>
+        <div class="console-foot">
+          <p class="disclaimer">示意仿真：拖影像素、频闪等级与暗带为教学参数，不对应具体产品。扫描 BFI 不消灭总暗时间。</p>
+          <button class="pause" data-pause aria-pressed="false">暂停</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="inspect-section" id="inspect">
+    <div class="wrap inspect-head">
+      <p class="mono" data-reveal="fade">02 / INSPECT THE STACK</p>
+      <div class="inspect-head-grid">
+        <h2 data-reveal="mask">把一帧，<br>拆成四层。</h2>
+        <div data-reveal="fade" style="--d:.1s">
+          <p class="lede">最里面是分区背光，往外依次是扩散、液晶和前玻璃。三维视角里，你可以直接看见暗带在背光层滚动，而液晶层仍保持自己的响应曲线。</p>
+          <div class="layer-chips" role="group" aria-label="显示层">
+            <button class="chip is-on" data-layer="backlight" aria-pressed="true">分区背光</button>
+            <button class="chip is-on" data-layer="lc" aria-pressed="true">液晶层</button>
+            <button class="chip is-on" data-layer="glass" aria-pressed="true">前玻璃</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="inspect-stage" data-reveal="curtain">
+      <canvas class="inspect-canvas" data-orbit aria-label="可拖动旋转的三维显示层示意"></canvas>
+      <div class="inspect-hud"><b>3D / PANEL STACK</b>2–16 ZONES · 4 LAYERS<br>ILLUSTRATIVE</div>
+      <div class="inspect-controls">
+        <div class="explode-head"><span>拆解距离 / EXPLODE</span><output data-explode-out>0%</output></div>
+        <input class="explode" type="range" min="0" max="100" step="1" value="0" data-explode aria-label="拆解距离">
+        <div class="view-actions">
+          <button class="is-on" data-auto-view aria-pressed="true">自动旋转</button>
+          <button data-reset-view>重置视角</button>
+        </div>
+      </div>
+      <div class="inspect-hint">拖动旋转 · 滚轮缩放</div>
+    </div>
+  </section>
+
+  <section class="timeline-section" id="frame">
+    <div class="wrap">
+      <div class="timeline-head">
+        <div>
+          <p class="mono" data-reveal="fade">03 / FRAME READER</p>
+          <h2 data-reveal="mask">拖动一条<br>16.7ms 的时间轴。</h2>
+          <p class="lede" data-reveal="fade" style="--d:.1s">同一帧里，刷新周期、液晶响应、背光脉冲各有各的时钟。把 playhead 拖到液晶翻转的中间，就会看到“光已经亮了，像素还没站稳”。</p>
+        </div>
+        <div class="timeline-mark" data-reveal="fade" style="--d:.15s">16.7<span>MS / ONE FRAME</span></div>
+      </div>
+      <div class="timing bleed" data-timing data-reveal="wipe">
+        <div class="timing-head">
+          <span>FRAME 01 / 60Hz · 拖拽读取</span>
+          <div class="timing-live"><span><i></i>实时判断 / LIVE</span><strong data-time-focus>光落在液晶翻转中间</strong></div>
+          <output data-time-readout>6.0 ms</output>
+        </div>
+        <p class="timing-note" data-time-note>光已经亮了，像素还没站稳；边缘被拉出一段拖影。</p>
+        <svg viewBox="0 0 1200 360" role="img" aria-label="一帧内刷新周期、液晶响应与背光脉冲的时间图">
+          <defs>
+            <linearGradient id="frameGrad" x1="0" x2="1">
+              <stop offset="0" stop-color="#ff5c7a"/><stop offset=".28" stop-color="#ffb27a"/><stop offset=".55" stop-color="#63e6e2"/><stop offset="1" stop-color="#b394ff"/>
+            </linearGradient>
+            <linearGradient id="lcFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#63e6e2" stop-opacity=".16"/><stop offset="1" stop-color="#63e6e2" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <g stroke="rgba(242,239,232,.05)" stroke-width="1">
+            <line x1="90" y1="54" x2="90" y2="314"/><line x1="395" y1="54" x2="395" y2="314"/><line x1="702" y1="54" x2="702" y2="314"/><line x1="1110" y1="54" x2="1110" y2="314"/>
+          </g>
+          <text x="0" y="76" fill="rgba(242,239,232,.5)" font-family="Bahnschrift, Consolas, monospace" font-size="12" letter-spacing="1">01 / 刷新周期</text>
+          <text x="0" y="176" fill="rgba(242,239,232,.5)" font-family="Bahnschrift, Consolas, monospace" font-size="12" letter-spacing="1">02 / 液晶响应</text>
+          <text x="0" y="276" fill="rgba(242,239,232,.5)" font-family="Bahnschrift, Consolas, monospace" font-size="12" letter-spacing="1">03 / 背光脉冲</text>
+          <rect x="90" y="64" width="1020" height="16" fill="url(#frameGrad)" opacity=".78"/>
+          <rect x="90" y="92" width="220" height="6" fill="rgba(255,178,122,.75)"/>
+          <path d="M90,176 C 240,176 270,112 395,112 C 520,112 530,112 1110,112 L1110,176 Z" fill="url(#lcFill)"/>
+          <path d="M90,176 C 240,176 270,112 395,112 C 520,112 530,112 1110,112" fill="none" stroke="#63e6e2" stroke-width="2.2"/>
+          <rect x="90" y="276" width="1020" height="7" fill="rgba(242,239,232,.10)"/>
+          <rect x="266" y="232" width="146" height="51" fill="#ffb27a" opacity=".88"/>
+          <text x="90" y="330" fill="rgba(242,239,232,.35)" font-family="Bahnschrift, Consolas, monospace" font-size="12">0</text>
+          <text x="395" y="330" text-anchor="middle" fill="rgba(242,239,232,.35)" font-family="Bahnschrift, Consolas, monospace" font-size="12">4.17</text>
+          <text x="702" y="330" text-anchor="middle" fill="rgba(242,239,232,.35)" font-family="Bahnschrift, Consolas, monospace" font-size="12">8.33</text>
+          <text x="1110" y="330" text-anchor="end" fill="rgba(242,239,232,.35)" font-family="Bahnschrift, Consolas, monospace" font-size="12">16.7 ms</text>
+          <g data-playhead transform="translate(398 0)">
+            <line x1="0" y1="44" x2="0" y2="318" stroke="#f2efe8" stroke-width="1" opacity=".8"/>
+            <circle cx="0" cy="44" r="4" fill="#f2efe8"/>
+          </g>
+        </svg>
+        <input class="scrub" type="range" min="0" max="16.7" step="0.1" value="6" aria-label="拖动时间轴">
+        <div class="timing-foot"><span>拖动 / 方向键读取</span><span>0–16.7 MS</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ways-section" id="ways">
+    <div class="wrap">
+      <div class="ways-head">
+        <div><p class="mono" data-reveal="fade">04 / TWO WAYS TO GO DARK</p><h2 data-reveal="mask">整屏切，<br>还是分开切？</h2></div>
+        <p data-reveal="fade" style="--d:.1s">先把 BFI 想成“每帧中间关一次灯”。一次全关，还是分成几条轮流关？这两种方式，就是全局 BFI 和扫描 BFI。前者简单直接，后者把闪烁分散到屏幕的不同位置。</p>
+      </div>
+      <article class="way-row" data-reveal="tilt">
+        <div class="way-no">01</div>
+        <div class="way-copy">
+          <h3>全局 BFI</h3>
+          <p class="way-plain"><b>一句话：</b>整块屏幕一起关灯，再一起亮。</p>
+          <p class="way-detail">它用最直接的办法切断拖影：运动物体在暗窗里不发光，残影还没来得及被看见，下一帧就来了。简单，但代价也最集中。</p>
+          <div class="way-points"><span><b>好处</b>运动边缘更干净</span><span><b>代价</b>全屏一起闪，亮度一起掉</span></div>
+          <div class="mini-label"><span>ALL ZONES / SAME TIME</span><span>亮度 ↓ · 频闪 ↑</span></div>
+        </div>
+        <div class="way-visual"><div class="mini" aria-hidden="true"><div class="band"></div><div class="band b2"></div><div class="band b3"></div><div class="cut g"></div><div class="edge"></div></div></div>
+      </article>
+      <article class="way-row reverse" data-reveal="tilt" style="--d:.12s">
+        <div class="way-no">02</div>
+        <div class="way-copy">
+          <h3>扫描 BFI</h3>
+          <p class="way-plain"><b>一句话：</b>把屏幕切成横条，黑窗从上往下滚。</p>
+          <p class="way-detail">每一行只在自己轮到的时候黑一下，所以同一时刻只有一小块在闪。它没有把暗时间变少，只是把“一起黑”改成“轮流黑”。</p>
+          <div class="way-points"><span><b>好处</b>闪烁被分散，观感更平稳</span><span><b>代价</b>暗时间不变，驱动更复杂</span></div>
+          <div class="mini-label"><span>DARK BAND / TOP → BOTTOM</span><span>亮度分摊 · 频闪 ↓</span></div>
+        </div>
+        <div class="way-visual"><div class="mini" aria-hidden="true"><div class="band"></div><div class="band b2"></div><div class="band b3"></div><div class="cut s"></div><div class="edge"></div></div></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="cost-section" id="cost">
+    <div class="wrap">
+      <p class="mono" data-reveal="fade" style="margin-bottom:18px">05 / THE BILL</p>
+      <div class="cost-head">
+        <h2 data-reveal="mask">它不是<br>免费的。</h2>
+        <div data-reveal="fade" style="--d:.1s">
+          <p>先记住一句话：BFI 不是让屏幕更亮，而是让每个像素在每一帧里少亮一会儿。少亮的那部分，就是代价。</p>
+          <p>扫描 BFI 不是提亮魔法，也不是“分区越多越好”。它只是把代价从“整屏同时”改成“分区轮流”；总账没有消失。</p>
+        </div>
+      </div>
+      <div class="cost-strip">
+        <article class="cost-item" data-reveal="tilt"><span class="n">01 / BRIGHTNESS</span><h3>亮度预算</h3><p>亮的时间少了，平均亮度就会下降。分区只是把“变暗”分散到不同位置，不会凭空补光。</p></article>
+        <article class="cost-item" data-reveal="tilt" style="--d:.1s"><span class="n">02 / COMFORT</span><h3>频闪与舒适</h3><p>整屏一起闪最明显；分区错开闪会舒服一些，但低亮度、低频率仍然会闪。</p></article>
+        <article class="cost-item" data-reveal="tilt" style="--d:.2s"><span class="n">03 / DRIVING</span><h3>驱动与漏光</h3><p>分区越细，控制越复杂；光可能从旁边漏出来，时序没对齐还会出现鬼影。</p></article>
+      </div>
+      <p class="cost-close" data-reveal="fade">所以，分区 BFI 优化的是“暗发生在哪里”，不是把暗消灭。</p>
+    </div>
+  </section>
+
+  <section class="apps-section" id="use">
+    <div class="wrap">
+      <div class="apps-head">
+        <div><p class="mono" data-reveal="fade">06 / APPLICATIONS</p><h2 data-reveal="mask">六种产品，<br>同一个时序问题。</h2></div>
+        <p data-reveal="fade" style="--d:.1s">不是六张应用图标。六种产品都做成可旋转的三维对象，选一个拖动它，看看同一套背光时序如何进入不同形态。</p>
+      </div>
+      <div class="appshow" data-app3d>
+        <div class="app-stage" data-reveal="curtain">
+          <canvas data-app-canvas aria-label="六种应用产品的三维示意，可拖动旋转"></canvas>
+          <div class="app-hud"><span>PRODUCT / 3D</span><b data-app-label>AR 眼镜</b><em data-app-code>01 / 06</em></div>
+          <div class="app-controls"><button class="is-on" data-app-auto aria-pressed="true">自动旋转</button><button data-app-reset>重置视角</button></div>
+          <div class="app-hint">拖动旋转 · 滚轮缩放</div>
+        </div>
+        <div class="app-caption" data-reveal="fade"><span>APPLICATION / 06</span><p data-app-desc>近眼显示里，运动边缘与双眼视差一起决定佩戴舒适度。</p><small>产品形态为示意，不使用品牌资产。</small></div>
+        <div class="app-index" data-reveal="fade" style="--d:.1s" role="tablist" aria-label="六种应用场景">
+          <button class="app-tab is-on" data-app="ar" role="tab" aria-selected="true"><canvas class="app-thumb" data-app-thumb="ar" aria-hidden="true"></canvas><span>01 / NEAR-EYE</span><b>AR 眼镜</b><i>轻量近眼显示</i></button>
+          <button class="app-tab" data-app="hud" role="tab" aria-selected="false"><canvas class="app-thumb" data-app-thumb="hud" aria-hidden="true"></canvas><span>02 / AUTOMOTIVE</span><b>车载 HUD</b><i>挡风玻璃投影</i></button>
+          <button class="app-tab" data-app="medical" role="tab" aria-selected="false"><canvas class="app-thumb" data-app-thumb="medical" aria-hidden="true"></canvas><span>03 / MEDICAL</span><b>医疗内窥</b><i>体内成像</i></button>
+          <button class="app-tab" data-app="aviation" role="tab" aria-selected="false"><canvas class="app-thumb" data-app-thumb="aviation" aria-hidden="true"></canvas><span>04 / AVIATION</span><b>航空座舱</b><i>姿态与航迹</i></button>
+          <button class="app-tab" data-app="industry" role="tab" aria-selected="false"><canvas class="app-thumb" data-app-thumb="industry" aria-hidden="true"></canvas><span>05 / INDUSTRY</span><b>工业检测</b><i>高速工件检测</i></button>
+          <button class="app-tab" data-app="replay" role="tab" aria-selected="false"><canvas class="app-thumb" data-app-thumb="replay" aria-hidden="true"></canvas><span>06 / REPLAY</span><b>赛事回放</b><i>高速轨迹慢放</i></button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <div><div class="mark">光的时间切片</div><div class="mono" style="margin-top:7px">SCANNING ZONAL BFI / 2026</div></div>
+  <p>面向大学生与新生的原理科普，非商用复刻。所有仿真参数为示意，不代表具体产品；扫描 BFI 不消灭总暗时间。</p>
+</footer>
+<audio data-bgm src="audio/nocturnal.mp3" loop preload="auto"></audio>
+<script src="sim/apps3d.js" defer></script>
+<script src="sim/final.js" defer></script>
+<script src="sim/motion.js" defer></script>
+<script src="sim/audio.js" defer></script>
+</body>
+</html>
